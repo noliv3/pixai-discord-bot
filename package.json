@@ -1,0 +1,32 @@
+{
+  "name": "eventbot",
+  "version": "1.0.0",
+  "description": "Discord Event Voting Bot with Upload, Rating, and FTP export",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.10",
+    "axios": "^1.6.7",
+    "basic-ftp": "^5.0.5",
+    "discord.js": "^14.13.0",
+    "form-data": "^4.0.0",
+    "uuid": "^11.1.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": ["discord", "bot", "nsfw", "image moderation", "voting"],
+  "author": "Jens",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/noliv3/PixAI-Discord-NSFW-Bot.git"
+  },
+  "bugs": {
+    "url": "https://github.com/noliv3/PixAI-Discord-NSFW-Bot/issues"
+  },
+  "homepage": "https://github.com/noliv3/PixAI-Discord-NSFW-Bot#readme"
+}

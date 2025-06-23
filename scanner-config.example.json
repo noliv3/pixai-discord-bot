@@ -1,0 +1,18 @@
+{
+    "scannerApiUrl": "http://localhost:8000/check",
+    "authHeader": "API_TOKEN_IF_EXISTS",
+    "multipartField": "image",
+    "flagThreshold": 0.5,
+    "deleteThreshold": 0.9,
+    "moderatorRoleId": "COPY_DISCORD_MOD_ID",
+    "moderatorChannelId": "COPY_DISCORD_MOD_LOG_CHANNELID",
+    "rulesChannelId": "COPY_DISCORD_RULES_CHANNELID",
+    "gifStep": 5,
+    "videoStep": 20,
+    "tagFilters": {
+        "0": [ "cp", "loli", "rape", "shota", "sex", "pussy", "covered_nipples", "nude" ],
+        "1": [ "sex", "pussy", "nipples", "nude", "ass_visible_through_thighs", "blood" ],
+        "2": [ "cleavage", "underwear", "cameltoe" ],
+        "3": [ "smile", "flower", "scenery" ]
+    }
+}
