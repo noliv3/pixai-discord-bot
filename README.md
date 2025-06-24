@@ -7,6 +7,7 @@ An automated Discord bot for moderating image content. It detects NSFW content a
 
 - Automatic scanning of all images and links
 - Risk evaluation via API (Risk Score + Tags)
+- Risk score sums hentai, porn and sexy via `calculateRisk`
 - Moderator alerts for suspicious content
 - Moderation via emoji: 👍 👎 ❌ ⚠️
 - Event system for image competitions
