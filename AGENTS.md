@@ -103,6 +103,13 @@ This structure makes filenames self-explanatory and sortable.
 ⚠️ Warning: Events are lost when the bot restarts. Consider persistent storage for production environments.
 
 ────────────────────────────────────────────
+⚙️ RISK SCORING
+
+The scanner returns scores for `hentai`, `porn`, and `sexy`. The helper
+`calculateRisk(scores)` parses these values with `parseFloat` and sums them to
+produce a single risk number.
+
+────────────────────────────────────────────
 📤 POTENTIAL EXTENSIONS
 
 - Store event history as JSON archive  
