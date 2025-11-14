@@ -20,3 +20,6 @@ scanner-config.json
 scanner-filters.json
 config/ftp.json
 flagged_reviews.json
+
+# Legacy codebase (read-only unless requested)
+_archived/
