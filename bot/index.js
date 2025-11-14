@@ -10,6 +10,7 @@ const createScannerClient = require('./lib/scannerClient');
 const createModuleLoader = require('./lib/moduleLoader');
 const createHealthCheck = require('./lib/healthCheck');
 const permissions = require('./lib/permissions');
+const createDmHandler = require('./lib/dmHandler');
 
 const logger = createLogger();
 const configManager = new ConfigManager({ logger });
@@ -100,6 +101,13 @@ const healthCheck = createHealthCheck({
 
 client.healthCheck = healthCheck;
 
+const dmHandler = createDmHandler({
+  client,
+  logger,
+  configManager,
+  permissions
+});
+
 function loadCoreEvents() {
   const eventsPath = path.join(__dirname, 'events');
   if (!fs.existsSync(eventsPath)) return;
@@ -182,6 +190,10 @@ async function dispatchToModules(eventName, args, guildId, guildConfig, globalCf
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
   const globalCfg = configManager.getGlobalConfig();
+  if (!message.guild) {
+    await dmHandler.handleMessage(message, globalCfg);
+    return;
+  }
   const prefix = globalCfg.bot.prefix || '!';
   if (message.content?.startsWith(prefix)) {
     const raw = message.content.slice(prefix.length).trim();
