@@ -3,6 +3,12 @@ npm-debug.log*
 logs/
 *.log
 
+bot/node_modules/
+bot/config/bot-config.json
+bot/data/
+
+docs/**/*.pdf
+
 event_files/
 deleted/
 temp/

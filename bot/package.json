@@ -1,0 +1,17 @@
+{
+  "name": "pixai-discord-bot",
+  "version": "0.1.0",
+  "description": "Moderationsbot für PixAI-Communities mit externer Scanner-Anbindung.",
+  "main": "index.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18.18.0"
+  },
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.10",
+    "discord.js": "^14.15.3"
+  }
+}
