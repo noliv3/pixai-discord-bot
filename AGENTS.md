@@ -1,9 +1,7 @@
-# PixAI Discord Bot – Fresh Development Instructions
+# PixAI Discord Bot – Entwicklungsleitfaden
 
-This repository is being rebooted. The entire legacy implementation now lives in [`_archived/`](./_archived/). Use the guidance below when making changes:
-
-- ✅ Focus new development at the repository root (outside `_archived/`).
-- 🚫 Do **not** modify or delete files inside `_archived/` unless the task explicitly permits it.
-- 📝 Keep this file and the root `README.md` updated with any high-level decisions or structural changes introduced during the rebuild.
-
-If you need historical context, browse the materials in `_archived/` but leave them unchanged.
+- ✅ Neue Implementierung lebt unter [`bot/`](./bot/). Alle Änderungen für den aktiven Bot passieren dort.
+- 📁 Die Legacy-Fassung bleibt in [`_archived/`](./_archived/) und ist nur Referenz – keine Änderungen ohne ausdrückliche Aufgabe.
+- 🧾 Dokumentation pflegen: Diese Datei und die README-Dateien müssen bei Strukturänderungen aktualisiert werden.
+- 🔐 Sensible Dateien (`bot/config/bot-config.json`, `bot/data/`) gehören nicht in Git. Prüfe vor Commits die `.gitignore`.
+- 🧪 Tests werden aktuell nicht automatisch ausgeführt; stelle sicher, dass Code syntaktisch valide ist.
