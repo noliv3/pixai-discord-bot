@@ -111,7 +111,9 @@ Die Konfiguration ist zweistufig aufgebaut:
      "bot": {
        "token": "DISCORD_BOT_TOKEN",
        "prefix": "!",
-       "owners": ["123456789012345678"]
+       "owners": ["123456789012345678"],
+       "clientId": "DISCORD_APP_CLIENT_ID",
+       "invitePermissions": 274877906944
      },
      "scanner": {
        "baseUrl": "https://scanner.example.com",
@@ -159,6 +161,11 @@ Die Konfiguration ist zweistufig aufgebaut:
      }
    }
    ```
+
+   Wichtige Felder:
+
+   - `bot.clientId`: Discord Application ID des Bots, benötigt für die Generierung von OAuth2-Invites in DMs.
+   - `bot.invitePermissions`: Vorausgewählte Berechtigungen als Integer (Discord-Permissions-Bitfeld) für den Bot-Invite-Link.
 
 2. **Guild-spezifische Settings**: eine Datei pro Guild unter `bot/config/guilds/<GUILD_ID>.json`
    ```jsonc
@@ -215,6 +222,21 @@ Beim ersten Join einer neuen Guild legt der Bot automatisch eine Default-Datei a
 | `!eventextend` | picture-events    | Admin        | Verlängert/verkürzt das Event um X Stunden. |
 | `!eventstatus` | picture-events    | Mod          | Listet aktive Events der Guild. |
 | `!eventexport` | picture-events    | Admin        | Erstellt einen ZIP-Export der Uploads. |
+
+## DM-Verwaltung & Invite-Unterstützung
+
+Der Bot reagiert in privaten Nachrichten auf zwei zentrale Flows:
+
+- **Server-Invite-Parsing**: Sobald ein gültiger Discord-Server-Invite gesendet wird (`discord.gg/<code>` oder `discord.com/invite/<code>`), antwortet der Bot mit einem vorbefüllten OAuth2-Bot-Invite-Link für genau diese Guild. Grundlage sind `bot.clientId` und optional `bot.invitePermissions` aus der globalen Konfiguration.
+- **Admin-Konfiguration per DM**: Server-Administratoren oder -Owner können Konfigurationen verwalten, sofern sie auf der jeweiligen Guild die nötigen Rechte besitzen.
+
+Verfügbare DM-Commands (alle mit dem globalen Prefix, standardmäßig `!`):
+
+- `!guilds` – listet alle Guilds, auf denen der Absender Administrator ist und der Bot aktiv ist.
+- `!config <guildId>` – zeigt eine kompakte JSON-Ansicht mit Prefix, Channel-/Rollen-Zuordnung, Scan-Einstellungen und Modul-Status.
+- `!config set <guildId> <pfad> <wert>` – aktualisiert einen bestehenden Konfigurationswert per Dot-Notation. Änderungen werden protokolliert und in der jeweiligen `guildId.json` persistiert.
+
+Fehlende Berechtigungen oder ungültige Pfade werden klar zurückgemeldet. Es werden keine sensiblen Daten in DMs ausgegeben.
 
 ## Betrieb
 

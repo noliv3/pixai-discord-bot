@@ -32,6 +32,22 @@ function normalizeScanner(scanner = {}) {
   return normalized;
 }
 
+function parseInvitePermissions(value) {
+  if (value === undefined || value === null || value === '') {
+    return undefined;
+  }
+  if (typeof value === 'number') {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    if (!Number.isNaN(parsed)) {
+      return parsed;
+    }
+  }
+  return undefined;
+}
+
 function readJson(filePath, fallback = {}) {
   try {
     const raw = fs.readFileSync(filePath, 'utf-8');
@@ -110,6 +126,26 @@ class ConfigManager {
     }
     if (bot.token && !bot.discordToken) {
       bot.discordToken = bot.token;
+    }
+    if (!bot.clientId) {
+      bot.clientId =
+        bot.applicationId ||
+        process.env.BOT_CLIENT_ID ||
+        process.env.DISCORD_CLIENT_ID ||
+        process.env.DISCORD_APPLICATION_ID ||
+        null;
+    }
+    if (bot.clientId && !bot.applicationId) {
+      bot.applicationId = bot.clientId;
+    }
+    const envInvitePermissions =
+      process.env.BOT_INVITE_PERMISSIONS || process.env.DISCORD_INVITE_PERMISSIONS || null;
+    const parsedEnvInvite = parseInvitePermissions(envInvitePermissions);
+    const parsedConfigInvite = parseInvitePermissions(bot.invitePermissions);
+    if (parsedConfigInvite !== undefined) {
+      bot.invitePermissions = parsedConfigInvite;
+    } else if (parsedEnvInvite !== undefined) {
+      bot.invitePermissions = parsedEnvInvite;
     }
     const scanner = normalizeScanner(config.scanner || {});
     const defaults = config.defaults || {};

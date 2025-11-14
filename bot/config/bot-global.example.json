@@ -2,7 +2,9 @@
   "bot": {
     "token": "DISCORD_BOT_TOKEN",
     "prefix": "!",
-    "owners": ["123456789012345678"]
+    "owners": ["123456789012345678"],
+    "clientId": "DISCORD_APP_CLIENT_ID",
+    "invitePermissions": 274877906944
   },
   "scanner": {
     "baseUrl": "https://scanner.example.com",
