@@ -1,5 +1,14 @@
 # Dokumentation – PixAI Discord Bot
 
+## Kanonische Quellen
+
+- [`README.md`](../README.md) – Repository-Überblick und Setup.
+- [`docs/README.md`](./README.md) – dieses Dokument mit der Detailarchitektur.
+- [`docs/AGENTS.md`](./AGENTS.md) – Rollen, Verantwortlichkeiten und Prozessketten.
+- [`bot/docs/README.md`](../bot/docs/README.md) – Vertiefende Techniknotizen für den aktiven Bot.
+
+Legacy-Dokumente und Altkonzeptenotizen befinden sich gesammelt im Archiv unter [`_archived/`](../_archived/). Sie werden nicht mehr gepflegt und dienen nur als Referenz.
+
 ## 1. Architekturüberblick
 
 Die neue Bot-Generation trennt konsequent zwischen Discord-Interaktion und Scanner-Anbindung. Kernkomponenten:
@@ -14,6 +23,12 @@ Die neue Bot-Generation trennt konsequent zwischen Discord-Interaktion und Scann
   - `flaggedStore.js` – Ablage geprüfter/gefährdeter Inhalte in `bot/data/flagged.json`.
   - `permissions.js` – Owner-/Admin-/Mod-Prüfungen.
   - `logger.js` – Zentrales JSON-Logging (Konsole + `bot/data/logs/bot.log`).
+
+### Architekturprinzipien (Phase 2)
+
+- **Trennung Bot vs. Scanner**: Der Bot enthält ausschließlich Discord-spezifische Logik und persistente Hilfsstrukturen. Alle Scans laufen über `scannerClient.js` als HTTP-Client zu einem externen Dienst.
+- **Versionierbare Module**: Produktive Dateien liegen ohne Suffix (`eventStore.js`, `scannerClient.js` etc.). Schlanke Wrapper mit `_v1` spiegeln die Referenznamen und ermöglichen spätere Varianten (`*_v2`) ohne den stabilen Einstiegspunkt zu brechen.
+- **Klare Verantwortlichkeiten**: `index.js` bootstrapped nur, Commands/Events kapseln Discord-Flows, Libraries bündeln wiederverwendbare Fachlogik.
 
 ## 2. Scanner-Anbindung
 
@@ -60,6 +75,57 @@ Jede Guild-Konfiguration erbt automatisch Werte aus `bot.defaultGuild`. Fehlt ei
 
 - `bot/config/bot-config.json` darf nie committed werden.
 - Zur Laufzeit aktualisierte Werte (z. B. durch `!setscan`) werden direkt in der Datei gespeichert.
+
+### Beispiel: Multi-Guild-Konfiguration
+
+Das Konfigurationsmodell unterstützt beliebig viele Server. Jedes Guild-Objekt ergänzt oder überschreibt Werte aus `bot.defaultGuild`:
+
+```jsonc
+{
+  "bot": {
+    "token": "DISCORD_BOT_TOKEN",
+    "owners": ["123456789012345678"]
+  },
+  "guilds": {
+    "123456789012345678": {
+      "modChannelId": "1111",
+      "modRoles": ["moderator-role"],
+      "scan": {
+        "enabled": true,
+        "flagThreshold": 0.6,
+        "deleteThreshold": 0.9
+      }
+    },
+    "987654321098765432": {
+      "modChannelId": "2222",
+      "modRoles": ["another-mod-role"],
+      "scan": {
+        "enabled": true,
+        "flagThreshold": 0.7,
+        "deleteThreshold": 0.95
+      }
+    }
+  },
+  "scanner": {
+    "baseUrl": "https://scanner.example/api",
+    "email": "bot@example.com",
+    "clientId": "pixai-bot"
+  },
+  "paths": {
+    "eventFiles": "./data/events",
+    "deletedFiles": "./data/deleted",
+    "logs": "./data/logs"
+  },
+  "versions": {
+    "events": "v1",
+    "commands": "v1",
+    "scannerClient": "v1",
+    "eventStore": "v1"
+  }
+}
+```
+
+Ältere Feldnamen wie `bot.discordToken` oder `scanner.url` werden weiterhin von `bot/lib/botConfig.js` unterstützt und automatisch auf die produktiven Schlüssel (`bot.token`, `scanner.baseUrl` usw.) gemappt.
 
 ## 4. Datenablage
 
@@ -133,4 +199,4 @@ Siehe ergänzend [`docs/AGENTS.md`](./AGENTS.md). Kurzfassung:
 
 ## 11. Bezug zur Legacy-Version
 
-Das alte Projekt (`_archived/`) liefert Referenzcode für erweiterte Funktionen (Filter-Management, öffentliche Scanner-API, Video-Scans). Bei Portierungen stets prüfen, dass keine Scanner-Details außerhalb von `lib/scannerClient.js` landen.
+Das alte Projekt (`_archived/`) liefert Referenzcode für erweiterte Funktionen (Filter-Management, öffentliche Scanner-API, Video-Scans). Die strukturierte Zuordnung zwischen den historischen `*_v1`-Dateien und den produktiven Modulen ist in [`_archived/DOCU/STRUCTURE_SYNC.md`](../_archived/DOCU/STRUCTURE_SYNC.md) dokumentiert. Bei Portierungen stets prüfen, dass keine Scanner-Details außerhalb von `lib/scannerClient.js` landen und Legacy-Code nicht direkt eingebunden wird.
