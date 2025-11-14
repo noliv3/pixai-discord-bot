@@ -8,17 +8,23 @@ Ein modularer Discord-Bot für die PixAI-Community. Er verbindet Moderations- un
 - **Scanner-Integration**: Kapselt alle HTTP-Aufrufe in `lib/scannerClient.js` und kann später an eine echte API angepasst werden.
 - **Event-Management**: `lib/eventStore.js` verwaltet Uploads, Votes und Statistiken pro Kanal.
 - **Moderationsdaten**: `lib/flaggedStore.js` speichert zur Nachverfolgung alle geprüften und markierten Nachrichten.
-- **Dokumentation**: Aktuelle Guides liegen unter [`docs/`](./docs/).
 
-Der bisherige Legacy-Code ist weiterhin unter [`_archived/`](./_archived/) verfügbar, bleibt jedoch unverändert.
+## Kanonische Dokumentation
+
+Die folgende Dokumentation gilt als verbindliche Referenz für die aktuelle Bot-Generation:
+
+- [`README.md`](./README.md) – Repository-Übersicht und Einstiegspunkte.
+- [`docs/README.md`](./docs/README.md) – Detailarchitektur, Konfiguration und Prozessketten.
+- [`docs/AGENTS.md`](./docs/AGENTS.md) – Rollen, Verantwortlichkeiten und technische Agenten.
+- [`bot/docs/README.md`](./bot/docs/README.md) – Raum für tiefere technische Notes (wird nach Bedarf erweitert).
+
+Historische Unterlagen, inklusive alter Architektur- und Designnotizen, liegen gesammelt unter [`_archived/`](./_archived/) und dienen ausschließlich als Legacy-Referenz.
 
 ## Verzeichnisstruktur
 
 ```
 README.md
 AGENTS.md
-DOCU/
-  STRUCTURE_SYNC.md
 bot/
   package.json
   index.js
@@ -58,6 +64,7 @@ docs/
   README.md
   AGENTS.md
 _archived/
+  DOCU/
 ```
 
 ### Ordner im Detail
@@ -66,8 +73,8 @@ _archived/
 - `bot/events/` – Discord-Eventlistener (`ready`, `messageCreate`, `messageReaction*`).
 - `bot/lib/` – Hilfsbibliotheken: Scanner-Client, Config-Lader, Event-/Flagged-Stores, Logging, Berechtigungen. Wrapper mit `_v1` spiegeln die Namenskonvention der Referenzdokumentation.
 - `bot/data/` – Arbeitsdaten des Bots (Events, Logs, gelöschte Uploads). Wird zur Laufzeit erstellt und nicht versioniert.
-- `DOCU/STRUCTURE_SYNC.md` – Verbindliche Zuordnung zwischen Referenzstruktur (`*_v1`) und produktiven Dateien.
 - `docs/` – Technische und organisatorische Dokumentation für Team und Operator:innen.
+- `_archived/` – Eingefrorenes Altprojekt inklusive historischer DOCU-Inhalte und Legacy-Code. Änderungen nur nach expliziter Freigabe.
 
 ## Voraussetzungen
 
@@ -212,4 +219,4 @@ _archived/
 
 ## Legacy-Code
 
-Die ursprüngliche Implementierung inklusive weiterer Referenzen verbleibt unverändert in [`_archived/`](./_archived/). Änderungen sind dort nur auf ausdrückliche Anweisung erlaubt.
+Das Altprojekt inklusive weiterer Referenzen (ehemals `DOCU/`) befindet sich vollständig unter [`_archived/`](./_archived/). Änderungen sind dort nur auf ausdrückliche Anweisung erlaubt und dürfen nicht mehr vom aktiven Code referenziert werden.
