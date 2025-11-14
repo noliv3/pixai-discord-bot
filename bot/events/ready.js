@@ -11,19 +11,17 @@ module.exports = {
     client.logger.info('Verbunden mit Guilds', { guilds: guildSummaries });
 
     for (const guild of client.guilds.cache.values()) {
-      const config = client.guildConfigs.get(guild.id);
-      if (!config) {
-        client.logger.warn('Keine spezifische Konfiguration für Guild gefunden', { guildId: guild.id });
-        continue;
-      }
-      const missing = [];
-      if (!config.modChannelId) missing.push('modChannelId');
-      if (!config.logChannelId) missing.push('logChannelId');
-      if (config.scan?.enabled && typeof config.scan.flagThreshold !== 'number') missing.push('scan.flagThreshold');
-      if (config.scan?.enabled && typeof config.scan.deleteThreshold !== 'number') missing.push('scan.deleteThreshold');
-      if (missing.length > 0) {
-        client.logger.warn('Guild-Konfiguration unvollständig', { guildId: guild.id, missing });
-      }
+      const config = client.configManager.ensureGuildConfig(guild.id);
+      const modules = Object.entries(config.modules || {}).map(([name, cfg]) => ({
+        name,
+        enabled: cfg?.enabled !== false
+      }));
+      client.logger.debug('Guild-Konfiguration geladen', {
+        guildId: guild.id,
+        modules,
+        scanEnabled: config.scan?.enabled,
+        scanThresholds: config.scan?.thresholds
+      });
     }
   }
 };

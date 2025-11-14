@@ -1,0 +1,26 @@
+{
+  "name": "picture-events",
+  "enabledByDefault": true,
+  "description": "Community picture contests with automated tracking",
+  "commands": [
+    "eventstart",
+    "eventstop",
+    "eventstatus",
+    "eventextend",
+    "eventexport"
+  ],
+  "events": ["messageCreate", "messageReactionAdd", "messageReactionRemove"],
+  "configKeys": ["modules.picture-events"],
+  "defaultConfig": {
+    "enabled": true,
+    "defaultDurationHours": 24,
+    "maxEntriesPerUser": 3,
+    "archiveAfterStop": true,
+    "voteEmojis": {
+      "approve": "👍",
+      "reject": "👎",
+      "warn": "⚠️",
+      "remove": "❌"
+    }
+  }
+}

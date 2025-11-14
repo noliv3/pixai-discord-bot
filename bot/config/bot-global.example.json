@@ -1,0 +1,59 @@
+{
+  "bot": {
+    "token": "DISCORD_BOT_TOKEN",
+    "prefix": "!",
+    "owners": ["123456789012345678"]
+  },
+  "scanner": {
+    "baseUrl": "https://scanner.example.com",
+    "email": "bot@example.com",
+    "clientId": "pixai-bot",
+    "timeoutMs": 10000
+  },
+  "defaults": {
+    "guild": {
+      "channels": {
+        "events": null,
+        "modLog": null
+      },
+      "roles": {
+        "admins": [],
+        "moderators": []
+      },
+      "scan": {
+        "enabled": true,
+        "reviewChannelId": null,
+        "thresholds": {
+          "flag": 0.6,
+          "delete": 0.95
+        }
+      },
+      "modules": {
+        "tag-scan": {
+          "enabled": true
+        },
+        "picture-events": {
+          "enabled": true,
+          "defaultDurationHours": 24,
+          "maxEntriesPerUser": 3,
+          "archiveAfterStop": true,
+          "voteEmojis": {
+            "approve": "👍",
+            "reject": "👎",
+            "warn": "⚠️",
+            "remove": "❌"
+          }
+        },
+        "community-guard": {
+          "enabled": true,
+          "moderationEmojis": {
+            "approve": "👍",
+            "reject": "👎",
+            "warn": "⚠️",
+            "remove": "❌"
+          }
+        }
+      }
+    }
+  }
+}

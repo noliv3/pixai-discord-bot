@@ -1,0 +1,17 @@
+{
+  "name": "community-guard",
+  "enabledByDefault": true,
+  "description": "Moderationshilfen für Reaktions-Workflows und Flagged Content",
+  "commands": [],
+  "events": ["messageReactionAdd", "messageReactionRemove"],
+  "configKeys": ["modules.community-guard"],
+  "defaultConfig": {
+    "enabled": true,
+    "moderationEmojis": {
+      "approve": "👍",
+      "reject": "👎",
+      "warn": "⚠️",
+      "remove": "❌"
+    }
+  }
+}
