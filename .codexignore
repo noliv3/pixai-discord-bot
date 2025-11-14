@@ -1,0 +1,2 @@
+# Avoid touching archived legacy implementation unless explicitly instructed.
+_archived/
