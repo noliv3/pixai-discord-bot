@@ -4,7 +4,9 @@ logs/
 *.log
 
 bot/node_modules/
-bot/config/bot-config.json
+bot/config/bot-global.json
+bot/config/guilds/*.json
+!bot/config/guilds/.gitkeep
 bot/data/
 
 docs/**/*.pdf

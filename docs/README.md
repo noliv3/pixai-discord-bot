@@ -1,202 +1,132 @@
 # Dokumentation – PixAI Discord Bot
 
-## Kanonische Quellen
-
-- [`README.md`](../README.md) – Repository-Überblick und Setup.
-- [`docs/README.md`](./README.md) – dieses Dokument mit der Detailarchitektur.
-- [`docs/AGENTS.md`](./AGENTS.md) – Rollen, Verantwortlichkeiten und Prozessketten.
-- [`bot/docs/README.md`](../bot/docs/README.md) – Vertiefende Techniknotizen für den aktiven Bot.
-
-Legacy-Dokumente und Altkonzeptenotizen befinden sich gesammelt im Archiv unter [`_archived/`](../_archived/). Sie werden nicht mehr gepflegt und dienen nur als Referenz.
+Dieses Dokument beschreibt die aktuelle modulare Architektur, Konfigurationsflüsse und Betriebsprozesse des PixAI Discord-Bots.
 
 ## 1. Architekturüberblick
 
-Die neue Bot-Generation trennt konsequent zwischen Discord-Interaktion und Scanner-Anbindung. Kernkomponenten:
+Die aktive Codebasis lebt unter [`bot/`](../bot/). Der Core besteht aus folgenden Bausteinen:
 
-- **Bot Core (`bot/index.js`)** – Initialisiert den Discord-Client, lädt Config, Commands und Events.
-- **Commands (`bot/commands/`)** – Textbasierte Moderations- und Administrationsbefehle. Jeder Befehl exportiert `{ name, description, requiredPermissions, execute }`.
-- **Events (`bot/events/`)** – Listener für `ready`, `messageCreate`, `messageReactionAdd`, `messageReactionRemove`.
-- **Libraries (`bot/lib/`)**:
-  - `botConfig.js` – Lesen/Speichern von `bot-config.json`, Mergen von Default-Guild-Werten.
-  - `scannerClient.js` – HTTP-Client für den externen Scanner (`/token`, `/check`, `/batch`, `/stats`).
-  - `eventStore.js` – Map-basierter Eventmanager inkl. JSON-Persistenz pro Event.
-  - `flaggedStore.js` – Ablage geprüfter/gefährdeter Inhalte in `bot/data/flagged.json`.
-  - `permissions.js` – Owner-/Admin-/Mod-Prüfungen.
-  - `logger.js` – Zentrales JSON-Logging (Konsole + `bot/data/logs/bot.log`).
+- **`index.js`** – Bootstrapping des Discord-Clients, Laden der Konfigurationen, Initialisierung von Logger, Stores, Health-Check und Module Loader.
+- **`lib/`** – Technische Infrastruktur:
+  - `botConfig.js` – `ConfigManager` mit Global-/Guild-Dateien, Auto-Onboarding & Caching.
+  - `moduleLoader.js` – Discovery und Registrierung der Module in `bot/modules/`.
+  - `healthCheck.js` – Konfigurations-, Scanner-, Modul- und Runtime-Prüfungen.
+  - `eventStore.js` & `flaggedStore.js` – Persistenzschicht für Events bzw. moderierte Inhalte.
+  - `scannerClient.js` – HTTP-Client für den externen Scanner.
+  - `permissions.js`, `logger.js` – Berechtigungen und Logging.
+- **`commands/`** – Core-Commands, die nicht an ein Modul gebunden sind (`!health`).
+- **`events/`** – Guild-unabhängige Events (`ready`, `guildCreate`). Modul-spezifische Events werden direkt im Modul registriert.
+- **`modules/`** – Feature-Plugins mit eigener `module.json`, Commands und Event-Handlern.
 
-### Architekturprinzipien (Phase 2)
+### Module (Phase 2)
 
-- **Trennung Bot vs. Scanner**: Der Bot enthält ausschließlich Discord-spezifische Logik und persistente Hilfsstrukturen. Alle Scans laufen über `scannerClient.js` als HTTP-Client zu einem externen Dienst.
-- **Versionierbare Module**: Produktive Dateien liegen ohne Suffix (`eventStore.js`, `scannerClient.js` etc.). Schlanke Wrapper mit `_v1` spiegeln die Referenznamen und ermöglichen spätere Varianten (`*_v2`) ohne den stabilen Einstiegspunkt zu brechen.
-- **Klare Verantwortlichkeiten**: `index.js` bootstrapped nur, Commands/Events kapseln Discord-Flows, Libraries bündeln wiederverwendbare Fachlogik.
+| Modul | Zweck | Hauptdateien |
+|-------|-------|--------------|
+| `tag-scan` | Lädt Attachments, ruft den externen Scanner auf und aktualisiert den `flaggedStore`. | `modules/tag-scan/*` |
+| `picture-events` | Verwaltet Bildevents inkl. Commands, Upload-Registrierung und Reaction-Votes. | `modules/picture-events/*` |
+| `community-guard` | Moderationsreaktionen auf geflaggte Inhalte (Warnung/Löschung). | `modules/community-guard/*` |
+
+Der Module Loader stellt jedem Modul ein `coreApi` bereit (`client`, `configManager`, `eventStore`, `flaggedStore`, `scanner`, `permissions`, Registrierungsfunktionen). Commands und Events werden dadurch zur Laufzeit beim Bot angemeldet.
 
 ## 2. Scanner-Anbindung
 
-`scannerClient.js` kapselt alle HTTP-Aufrufe:
+`scannerClient.js` kapselt alle Interaktionen mit dem externen Dienst:
 
-- `ensureToken()` ruft `/token?email=...&clientId=...` ab, cached das Ergebnis und erneuert bei 403 automatisch.
-- `scanImage(buffer, filename, mime)` sendet ein Attachment via `POST /check` (Multipart).
-- `scanBatch(buffer, mime)` erlaubt den Upload mehrerer Frames oder ZIPs via `POST /batch`.
-- `getStats()` liest Statistikdaten (`GET /stats`).
+- `ensureToken()` holt und cached ein API-Token.
+- `scanImage(buffer, filename, mimeType)` sendet Attachments an `/check`.
+- `scanBatch(buffer, mimeType)` erlaubt Batch-Uploads (z. B. ZIPs).
+- `getStats()` liefert Statusinformationen für den Health-Check.
 
-Zeitüberschreitungen werden über `AbortSignal.timeout` abgesichert. Netzwerkfehler erzeugen Logeinträge, ohne den Bot zu beenden.
+Fehler oder Zeitüberschreitungen werden protokolliert. Ist kein `baseUrl` gesetzt, bleibt der Client deaktiviert – der Bot läuft weiter, markiert Uploads aber nicht automatisch.
 
-## 3. Konfiguration
+## 3. Konfigurationsmodell
 
-### 3.1 Struktur
+Die Konfiguration ist zweistufig aufgebaut:
 
-`bot-config.json` besteht aus drei Ebenen:
+1. **Global:** `bot/config/bot-global.json`
+   - `bot.token`, `bot.prefix`, `bot.owners`
+   - `scanner.baseUrl`, `scanner.email`, `scanner.clientId`
+   - `defaults.guild` enthält Standardwerte für Channels, Rollen, Scan-Thresholds und Modul-Defaults.
+2. **Pro Guild:** `bot/config/guilds/<GUILD_ID>.json`
+   - `channels.events`, `channels.modLog`
+   - `roles.admins`, `roles.moderators`
+   - `scan.enabled`, `scan.reviewChannelId`, `scan.thresholds.flag/delete`
+   - `modules.<modulName>` mit modul-spezifischen Einstellungen (`enabled`, `thresholds`, `voteEmojis`, ...)
 
-1. `bot` – Globale Bot-Einstellungen (Token, Prefix, Owner-IDs, Default-Guild).
-2. `scanner` – Zugangsdaten zum externen Scanner (Base-URL, Service-Mail, Client-ID, Timeout).
-3. `guilds` – Individuelle Overrides pro Guild-ID (Rollen, Kanäle, Scan- & Event-Settings).
+Der `ConfigManager` sorgt für Auto-Onboarding (`guildCreate` erzeugt Dateien bei Bedarf), hält ein Cache mit Mtime-Tracking und verhindert Reloads während kritischer Operationen. Legacy-Felder wie `bot.discordToken` oder `scanner.url` werden weiterhin auf die neuen Schlüssel gemappt.
 
-Jede Guild-Konfiguration erbt automatisch Werte aus `bot.defaultGuild`. Fehlt ein Eintrag, greift der Default.
+## 4. Health-Check
 
-### 3.2 Felder im Detail
+`lib/healthCheck.js` führt vier Prüfblöcke aus:
 
-| Feld | Beschreibung |
-|------|--------------|
-| `bot.token` | Discord-Bot-Token. Muss geheim bleiben. |
-| `bot.prefix` | Prefix für Textbefehle (Standard: `!`). |
-| `bot.owners` | User-IDs mit uneingeschränktem Zugriff. |
-| `bot.defaultGuild.modRoles` | Rollen, die Moderationsrechte erhalten. |
-| `bot.defaultGuild.adminRoles` | Rollen mit Adminbefehlen. |
-| `bot.defaultGuild.event.*` | Standardwerte für Events (Aktivierung, Dauer, Upload-Limit). |
-| `bot.defaultGuild.scan.*` | Standard-Schwellen für Flag/Delete, Review-Channel. |
-| `scanner.baseUrl` | Basis-URL des Scanner-Dienstes. |
-| `scanner.email` / `scanner.clientId` | Authentifizierungsdaten für `/token`. |
-| `scanner.timeoutMs` | Timeout in Millisekunden für alle Requests. |
-| `guilds[ID].modChannelId` | Kanal für Moderationsmeldungen. |
-| `guilds[ID].logChannelId` | Kanal für Bot-Logs innerhalb der Guild. |
-| `guilds[ID].event.voteEmojis` | Zuordnung von Emojis zu den Reaktionsaktionen (`approve`, `reject`, `warn`, `remove`). |
+- **Config Integrity** – Pflichtfelder in globalen/guild-spezifischen JSONs, Modul-Konfigurationen.
+- **Scanner Connectivity** – `getStats()` gegen den konfigurierten Scanner-Endpunkt.
+- **Module Consistency** – Abgleich `module.json` mit registrierten Commands/Events.
+- **Runtime Checks** – Schreibrechte auf `bot/data/` und `bot/data/events/`.
 
-### 3.3 Secrets & Speicherung
+Das Ergebnis wird beim Start protokolliert. Kritische Fehler führen zum Abbruch, Warnungen lassen den Bot weiterlaufen. Der Core-Command `!health` kann den Check jederzeit erneut auslösen.
 
-- `bot/config/bot-config.json` darf nie committed werden.
-- Zur Laufzeit aktualisierte Werte (z. B. durch `!setscan`) werden direkt in der Datei gespeichert.
+## 5. Event-Flows
 
-### Beispiel: Multi-Guild-Konfiguration
+### 5.1 Core Events
 
-Das Konfigurationsmodell unterstützt beliebig viele Server. Jedes Guild-Objekt ergänzt oder überschreibt Werte aus `bot.defaultGuild`:
+- **`ready`** – loggt Bot-Tag und vorhandene Guilds, stellt sicher, dass pro Guild eine Konfiguration existiert.
+- **`guildCreate`** – ruft `ConfigManager.ensureGuildConfig` auf und loggt das Onboarding.
 
-```jsonc
-{
-  "bot": {
-    "token": "DISCORD_BOT_TOKEN",
-    "owners": ["123456789012345678"]
-  },
-  "guilds": {
-    "123456789012345678": {
-      "modChannelId": "1111",
-      "modRoles": ["moderator-role"],
-      "scan": {
-        "enabled": true,
-        "flagThreshold": 0.6,
-        "deleteThreshold": 0.9
-      }
-    },
-    "987654321098765432": {
-      "modChannelId": "2222",
-      "modRoles": ["another-mod-role"],
-      "scan": {
-        "enabled": true,
-        "flagThreshold": 0.7,
-        "deleteThreshold": 0.95
-      }
-    }
-  },
-  "scanner": {
-    "baseUrl": "https://scanner.example/api",
-    "email": "bot@example.com",
-    "clientId": "pixai-bot"
-  },
-  "paths": {
-    "eventFiles": "./data/events",
-    "deletedFiles": "./data/deleted",
-    "logs": "./data/logs"
-  },
-  "versions": {
-    "events": "v1",
-    "commands": "v1",
-    "scannerClient": "v1",
-    "eventStore": "v1"
-  }
-}
-```
+### 5.2 Modul-Events
 
-Ältere Feldnamen wie `bot.discordToken` oder `scanner.url` werden weiterhin von `bot/lib/botConfig.js` unterstützt und automatisch auf die produktiven Schlüssel (`bot.token`, `scanner.baseUrl` usw.) gemappt.
-
-## 4. Datenablage
-
-- `bot/data/events/` – Ein Unterordner pro aktivem/abgeschlossenem Event (`<channelId>_<eventName>` mit `event.json` & optionalen ZIPs).
-- `bot/data/flagged.json` – JSON-Liste geflaggter Nachrichten inklusive Risiko und Tags.
-- `bot/data/deleted/` – Platzhalter für gelöschte Uploads (kann von Moderation befüllt werden).
-- `bot/data/logs/bot.log` – Strukturierte Logdatei.
-
-Alle Ordner werden automatisch erstellt und sind per `.gitignore` vom Repository ausgeschlossen.
-
-## 5. Events & Ablauf
-
-### 5.1 `ready`
-- Loggt Bot-Tag und alle Guilds.
-- Prüft pro Guild, ob Pflichtwerte gesetzt sind (`modChannelId`, `logChannelId`, Scan-Schwellen).
-
-### 5.2 `messageCreate`
-- Erkennt Commands via Prefix (`client.commands`).
-- Führt Berechtigungsprüfungen mittels `permissions.js` durch.
-- Scannt Attachments, sofern der Scanner aktiv ist und das Guild-Profil `scan.enabled` gesetzt hat.
-- Schreibt Treffer in `flaggedStore` (Status `flag` oder `delete`).
-- Registriert Event-Uploads via `eventStore.registerUpload(...)`.
-
-### 5.3 `messageReactionAdd` / `messageReactionRemove`
-- Übersetzt Emojis anhand der Guild-Konfiguration (`event.voteEmojis`).
-- Aktualisiert Votes in `eventStore`.
-- Synchronisiert Entscheidungen im `flaggedStore` (Warnung/Löschung).
+- **`tag-scan` → `messageCreate`** – lädt Attachments, ruft den Scanner auf und aktualisiert den `flaggedStore`. Scan-Ergebnisse werden im Message-Objekt (`message._pixai.scanResults`) hinterlegt, damit andere Module darauf zugreifen können.
+- **`picture-events` → `messageCreate`** – registriert Uploads in aktiven Event-Kanälen (`eventStore`). Nutzt optional die Scan-Metadaten.
+- **`picture-events` → `messageReactionAdd/Remove`** – mappt Reaktionen auf Votes und pflegt Event-Statistiken.
+- **`community-guard` → `messageReactionAdd/Remove`** – interpretiert Moderations-Emojis auf geflaggten Nachrichten und aktualisiert den `flaggedStore` (inkl. optionalem Delete).
 
 ## 6. Commands
 
-| Name | Rolle | Zweck |
-|------|-------|-------|
-| `eventstart` | Admin | Neues Event im Kanal starten (`!eventstart <name> [stunden] [max]`). |
-| `eventstop` | Admin | Laufendes Event beenden. |
-| `eventextend` | Admin | Laufzeit um ±X Stunden anpassen. |
-| `eventstatus` | Mod | Liste aller aktiven Events des Servers. |
-| `eventexport` | Admin | ZIP der Uploads erstellen (optional top N). |
-| `setscan` | Admin | Flag-/Delete-Thresholds aktualisieren und speichern. |
+### Core
 
-## 7. Rollen & Rechte
+| Name | Beschreibung | Berechtigung |
+|------|--------------|--------------|
+| `health` | Führt den Health-Check aus und gibt eine zusammengefasste Statusübersicht. | Admin |
 
-Siehe ergänzend [`docs/AGENTS.md`](./AGENTS.md). Kurzfassung:
+### Modulgebunden
 
-- **Owner**: Immer berechtigt, Commands auszuführen.
-- **Admins**: Müssen in `adminRoles` stehen oder Discord-`ADMINISTRATOR` besitzen.
-- **Moderatoren**: Rollen aus `modRoles`. Dürfen Events einsehen und reagieren.
-- **User**: Können an Events teilnehmen; Upload-Limits werden im `eventStore` überwacht.
+| Modul | Commands |
+|-------|----------|
+| `tag-scan` | `scanconfig`, `setscan` – Thresholds anzeigen/ändern. |
+| `picture-events` | `eventstart`, `eventstop`, `eventextend`, `eventstatus`, `eventexport`. |
+| `community-guard` | aktuell keine Text-Commands. |
 
-## 8. Sicherheit & Compliance
+Die Berechtigungsprüfung erfolgt zentral über `permissions.canUseCommand(...)`. Owners umgehen sämtliche Checks.
 
-- Discord-Bot-Token und Scanner-Credentials niemals in Tickets, Logs oder Commits posten.
-- Geflaggte Inhalte enthalten sensible Medien; Zugriff auf `bot/data/` nur für Moderationspersonal.
-- Lösch- oder Warnaktionen werden durch Reaction-Emojis gesteuert. Prüfe regelmäßig, dass `voteEmojis` serverweit konsistent sind.
-- Bei Fehlern im Scanner (Timeout/403) bleibt die Moderation aktiv; die Meldung erscheint im Log.
+## 7. Datenablage
 
-## 9. Erweiterung & Wartung
+- `bot/data/events/` – Unterordner je Event (`<channelId>_<name>` mit `event.json` & optionalen ZIP-Exports).
+- `bot/data/flagged.json` – JSON-Liste moderierter Nachrichten.
+- `bot/data/logs/` – strukturierte Log-Dateien des Bots.
 
-- Neue Commands: Datei unter `bot/commands/` anlegen, `name` eindeutig wählen, Berechtigungen definieren.
-- Neue Events: Datei unter `bot/events/`, Export `{ name, once?, execute }`.
-- Event-Datenpersistenz kann erweitert werden (z. B. zusätzliche JSON-Exports). Nutze `eventStore.updateEvent` für Modifikationen.
-- Für Video/GIF-Handling können zusätzliche Batch-Scans über `scannerClient.scanBatch` implementiert werden (vgl. Legacy-Code in `_archived/`).
+Alle Pfade werden beim Start automatisch angelegt und sind per `.gitignore` ausgeschlossen.
 
-## 10. Troubleshooting
+## 8. Betriebsablauf
+
+1. Start: `node bot/index.js` (bzw. `npm start`).
+2. Core lädt globale Konfiguration, initialisiert Services, Module und führt den Health-Check aus.
+3. Module registrieren Commands/Events. Aktivierung erfolgt pro Guild anhand der JSON-Konfiguration.
+4. Während des Betriebs erkennt der ConfigManager Änderungen an JSON-Dateien über Mtime-Vergleiche und lädt sie neu, sofern keine kritische Operation läuft (`beginGuildOperation`/`endGuildOperation`).
+
+## 9. Troubleshooting
 
 | Problem | Ursache | Lösung |
 |---------|---------|--------|
-| Keine Scans trotz Uploads | Scanner deaktiviert oder keine Guild-Konfiguration | Prüfen, ob `scan.enabled` true und `scanner.baseUrl` gesetzt ist. Logs unter `bot/data/logs/bot.log` prüfen. |
-| Commands reagieren nicht | Fehlende Berechtigungen oder falscher Prefix | `bot.prefix` prüfen, Rollen in `bot-config.json` anpassen. |
-| Event-Upload abgelehnt | Upload-Limit erreicht | `maxEntriesPerUser` erhöhen oder Einträge löschen. |
-| ZIP-Export fehlschlägt | Attachment nicht mehr verfügbar | Log prüfen, ggf. Export direkt nach Event-Ende durchführen. |
+| Health-Check stoppt den Start | Fehlende Pflichtfelder oder keine Schreibrechte | Konfiguration prüfen, Verzeichnisse anlegen/setzen. |
+| Scanner-Calls schlagen fehl | `scanner.baseUrl`/Credentials falsch oder Service offline | Werte korrigieren, Service prüfen. Ohne Scanner läuft der Bot weiter, markiert aber nichts automatisch. |
+| Event-Uploads werden abgelehnt | Upload-Limit erreicht (`maxEntriesPerUser`) | Limit anpassen oder bestehende Einträge löschen. |
+| Moderations-Reaktionen greifen nicht | Modul deaktiviert oder Emoji-Mapping falsch | `modules.community-guard` aktivieren bzw. `moderationEmojis` aktualisieren. |
 
-## 11. Bezug zur Legacy-Version
+## 10. Weiterführende Hinweise
 
-Das alte Projekt (`_archived/`) liefert Referenzcode für erweiterte Funktionen (Filter-Management, öffentliche Scanner-API, Video-Scans). Die strukturierte Zuordnung zwischen den historischen `*_v1`-Dateien und den produktiven Modulen ist in [`_archived/DOCU/STRUCTURE_SYNC.md`](../_archived/DOCU/STRUCTURE_SYNC.md) dokumentiert. Bei Portierungen stets prüfen, dass keine Scanner-Details außerhalb von `lib/scannerClient.js` landen und Legacy-Code nicht direkt eingebunden wird.
+- Neue Module folgen der Struktur `modules/<name>/module.json` + `index.js` + optional `commands/`/`events/`.
+- `module.json` enthält Metadaten (`name`, `description`, `commands`, `events`, `defaultConfig`). Diese Informationen nutzt der Health-Check.
+- Für neue Commands innerhalb eines Moduls `registerCommand` aus dem Core-API verwenden; Event-Handler werden über `registerEventHandler` eingebunden.
+- Dokumentation immer in README & AGENTS aktualisieren, sobald sich Konfigurations- oder Betriebsabläufe ändern.
+
+Weitere Rollen- und Prozessdetails siehe [`docs/AGENTS.md`](./AGENTS.md).
