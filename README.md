@@ -17,14 +17,39 @@ Der bisherige Legacy-Code ist weiterhin unter [`_archived/`](./_archived/) verf�
 ```
 README.md
 AGENTS.md
+DOCU/
+  STRUCTURE_SYNC.md
 bot/
   package.json
   index.js
   config/
     bot-config.example.json
   commands/
+    eventstart.js
+    eventstop.js
+    eventstatus.js
+    eventextend.js
+    eventexport.js
+    setscan.js
+    # reservierter Slot: filter_v1.js
   events/
+    ready.js
+    messageCreate.js
+    messageReactionAdd.js
+    messageReactionRemove.js
   lib/
+    botConfig.js
+    botConfig_v1.js
+    scannerClient.js
+    scannerClient_v1.js
+    eventStore.js
+    eventStore_v1.js
+    flaggedStore.js
+    flaggedStore_v1.js
+    permissions.js
+    permissions_v1.js
+    logger.js
+    logger_v1.js
   data/
     events/
     deleted/
@@ -39,8 +64,9 @@ _archived/
 
 - `bot/commands/` – ein Modul pro Textbefehl (Eventstart, Export, Scan-Konfiguration usw.).
 - `bot/events/` – Discord-Eventlistener (`ready`, `messageCreate`, `messageReaction*`).
-- `bot/lib/` – Hilfsbibliotheken: Scanner-Client, Config-Lader, Event-/Flagged-Stores, Logging, Berechtigungen.
+- `bot/lib/` – Hilfsbibliotheken: Scanner-Client, Config-Lader, Event-/Flagged-Stores, Logging, Berechtigungen. Wrapper mit `_v1` spiegeln die Namenskonvention der Referenzdokumentation.
 - `bot/data/` – Arbeitsdaten des Bots (Events, Logs, gelöschte Uploads). Wird zur Laufzeit erstellt und nicht versioniert.
+- `DOCU/STRUCTURE_SYNC.md` – Verbindliche Zuordnung zwischen Referenzstruktur (`*_v1`) und produktiven Dateien.
 - `docs/` – Technische und organisatorische Dokumentation für Team und Operator:innen.
 
 ## Voraussetzungen
@@ -127,6 +153,8 @@ _archived/
 - `scanner.baseUrl`, `scanner.email`, `scanner.clientId` – Zugangsdaten zum externen Scanner.
 - Pro Guild: `modChannelId`, `logChannelId` sowie passende Rollen-IDs für Admins und Moderation.
 
+> 💡 **Kompatibilität zur Referenz-Doku:** `bot.discordToken`, `bot.ownerIds` und `scanner.url` werden automatisch auf die produktiv genutzten Felder (`bot.token`, `bot.owners`, `scanner.baseUrl`) gemappt. Fehlen `paths` oder `versions`, ergänzt der Loader Standardwerte (`./data/events`, `./data/deleted`, `./data/logs` sowie `v1`).
+
 ### Mehrere Guilds
 
 `guilds` enthält je einen Schlüssel pro Guild-ID. Nicht gesetzte Werte fallen automatisch auf `bot.defaultGuild` zurück.
@@ -151,6 +179,17 @@ _archived/
 | `!eventstatus`    | Mod          | Zeigt aktive Events des Servers an. |
 | `!eventexport`    | Admin        | Erstellt eine ZIP-Datei mit Event-Uploads. |
 | `!setscan`        | Admin        | Aktualisiert Flag-/Delete-Schwellenwerte pro Guild. |
+
+### Referenz-Mapping der Commands
+
+| Referenz (Doku) | Produktiver Command |
+|-----------------|---------------------|
+| `event_start_v1` | `!eventstart` |
+| `event_stop_v1`  | `!eventstop` |
+| `event_stats_v1` | `!eventstatus` |
+| `event_zip_v1`   | `!eventexport` |
+| `setscan_v1`     | `!setscan` |
+| `filter_v1`      | _nicht implementiert_ |
 
 ## Event- und Reaktionslogik
 
