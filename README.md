@@ -9,6 +9,23 @@ Ein modularer Discord-Bot für die PixAI-Community. Die aktuelle Generation setz
 - **Persistenz**: `lib/eventStore.js` und `lib/flaggedStore.js` speichern Event-Uploads bzw. moderierte Inhalte als JSON.
 - **Scanner-Integration**: `lib/scannerClient.js` bündelt alle HTTP-Aufrufe zum externen Scanner. Der Client erwartet einen reinen Text-Token vom Endpunkt `/token` und sendet ihn unverändert (ohne `Bearer`-Präfix) im `Authorization`-Header. Seit dem neuen Upload-Flow erledigt der Client auch das Herunterladen von Medien (Discord-CDN, externe Links) und baut korrekte `multipart/form-data`-Uploads über die Hilfsfunktionen `checkImageFromUrl` (Einzelbilder) sowie `batchFromUrl` (GIF/Video). Für Downloads verwenden wir bewusst das Node.js-`https`-Modul, um Timeout- und Stream-Handling stabil zu halten; für die Uploads kommen die nativen Implementierungen von `fetch`, `FormData`, `File` und `Blob` zum Einsatz. Der Code bleibt dabei vollständig im CommonJS-Stil (`require`), sodass keine `type: "module"`-Umstellung nötig ist.
 
+  **Scanner-API Quick Facts**
+
+  - **Tokenverwaltung**: `/token?email=<mail>&renew=1` liefert einen Klartext-Token, der nach 30&nbsp;Tagen verfällt. Der Bot cached das Ergebnis und löst bei Bedarf eine Erneuerung aus.
+  - **Einzelprüfungen**: `/check` erwartet ein Multipart-Feld `image` (max. 10&nbsp;MB). Der Scanner validiert das Format mit Pillow, führt Module wie `nsfw_scanner`, `tagging`, `deepdanbooru_tags`, `statistics` und `image_storage` aus und liefert ein kombiniertes JSON zurück.
+  - **Payload-Format**: Modul-Schlüssel stehen im Response-JSON flach als `modules.<name>`. `scanCore_v1` normalisiert diese Struktur (inkl. NSFW-Scores), sodass Module keine eigenen Parser mehr pflegen müssen.
+  - **Batch-Uploads**: `/batch` verarbeitet GIF/Video-Sammlungen über das Feld `file` (max. 25&nbsp;MB). Intern nutzt die API `scan_batch`, das Frames extrahiert und sequenziell über die Module leitet.
+  - **Statistiken**: `/stats` gibt aggregierte Nutzungszahlen zurück und benötigt wie die übrigen Endpunkte einen gültigen Token im Header.
+  - **Fehlerszenarien**: Ungültige Multipart-Anfragen oder übergroße Dateien werden mit `400` bzw. `413` quittiert. Der Server loggt Rohdaten problematischer Requests in `raw_connections.log`.
+
+  **Datenfluss Bot → Scanner → Bot**
+
+  1. `nsfw-scanner`/`tag-scan` sammeln Attachments, ermitteln Dateinamen und Mime-Type und fordern per `scanner.ensureToken()` ein gültiges Token an.
+  2. `checkImageFromUrl` bzw. `batchFromUrl` laden das Medium über HTTPS herunter, prüfen die Größe gegen die Limits und erstellen das Multipart-Formular.
+  3. Die Anfrage an `/check` oder `/batch` verwendet das Token als Klartext-Header. Der Scanner orchestriert Module, speichert Metadaten (z. B. `image_storage`) und zählt Tags (`statistics`).
+  4. Das kombinierte JSON wird an `scanCore_v1` zurückgegeben. Die Bibliothek normalisiert die flachen Modul-Schlüssel (`modules.*`), extrahiert NSFW-Scores und berechnet Risiko-Level, aktualisiert den `flaggedStore` und speichert Event-Metadaten.
+  5. Reaktions-Handler (`community-guard`, `picture-events`) lesen dieselben Scan-Ergebnisse aus `message._pixai.scanResults`, um Moderationsentscheidungen und Event-Votes nachzuhalten.
+
 ## Phase-2 Scanner (BOT1)
 
 Die Legacy-PIX-Bot-Logik wurde als modulare Bibliothek in BOT1 integriert. Wichtige Zuordnungen:

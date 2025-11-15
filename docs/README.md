@@ -32,13 +32,21 @@ Der Module Loader stellt jedem Modul ein `coreApi` bereit (`client`, `configMana
 
 `scannerClient.js` kapselt alle Interaktionen mit dem externen Dienst und wird als CommonJS-Factory (`require('./lib/scannerClient')`) eingebunden:
 
-- `ensureToken()` holt und cached ein API-Token, inklusive automatischem Renew bei `403`.
-- `scanImage(buffer, filename, mimeType)` sendet Attachments an `/check`.
-- `scanBatch(buffer, mimeType, filename?)` erlaubt Batch-Uploads (z. B. GIF/Video).
-- `checkImageFromUrl(url, meta?)` bzw. `batchFromUrl(url, meta?)` laden Medien zuerst herunter und übernehmen anschließend den Upload.
-- `getStats()` liefert Statusinformationen für den Health-Check.
+- `ensureToken()` holt und cached ein API-Token, inklusive automatischem Renew bei `403`. Tokens vom Scanner verfallen nach 30&nbsp;Tagen; der Client setzt den Klartext-Token unverändert in den `Authorization`-Header.
+- `scanImage(buffer, filename, mimeType)` sendet Attachments an `/check` (Multipart-Feld `image`, Limit 10&nbsp;MB).
+- `scanBatch(buffer, mimeType, filename?)` erlaubt Batch-Uploads (Multipart-Feld `file`, Limit 25&nbsp;MB); der Scanner zerlegt Dateien per `gif_batch.scan_batch` in Frames.
+- `checkImageFromUrl(url, meta?)` bzw. `batchFromUrl(url, meta?)` laden Medien zuerst über HTTPS herunter, prüfen Größe/Mime-Type und übernehmen anschließend den Upload.
+- `getStats()` liefert Statusinformationen für den Health-Check (`/stats`).
 
-Fehler oder Zeitüberschreitungen werden protokolliert. Ist kein `baseUrl` gesetzt, bleibt der Client deaktiviert – der Bot läuft weiter, markiert Uploads aber nicht automatisch.
+Fehler oder Zeitüberschreitungen werden protokolliert. Ist kein `baseUrl` gesetzt, bleibt der Client deaktiviert – der Bot läuft weiter, markiert Uploads aber nicht automatisch. Bei unerwarteten HTTP-Fehlern schreibt der Scanner die Rohdaten der Anfrage in `raw_connections.log`, wodurch Analysen fehlerhafter Uploads möglich sind.
+
+### Datenfluss Bot ↔ Scanner
+
+1. `nsfw-scanner`/`tag-scan` sammeln Attachments, validieren URL-Quellen über `urlSanitizer_v1` und rufen `scanner.ensureToken()` auf.
+2. Die `*_FromUrl`-Hilfen streamen Medien nach `scanCore_v1`, das Dateigrößen- und Mime-Type-Checks ausführt, bevor der Upload ausgelöst wird.
+3. `/check` liefert Module-Resultate (`modules.nsfw_scanner`, `modules.tagging`, `modules.deepdanbooru_tags`, `modules.statistics`, `modules.image_storage` + dynamisch geladene Module). Fehler einzelner Module erscheinen als `{ error: <message> }`, ohne den Gesamtprozess zu stoppen.
+4. `scanCore_v1` normalisiert die flachen Modul-Keys (`modules.*` → `modules.<name>`), verknüpft die Ergebnisse mit der Nachricht (`message._pixai.scanResults`), aktualisiert `flaggedStore`/`eventStore` und bewertet Risiko-/Delete-Level via `riskEngine_v1`.
+5. Reaction-Handler (`community-guard`, `picture-events`) lesen diese Ergebnisse aus den Stores, um Moderationsentscheidungen durchzuführen oder Votes zu justieren. Entfernte Reaktionen stoßen über `modReview_v1` eine Neubewertung an.
 
 ## 3. Konfigurationsmodell
 
