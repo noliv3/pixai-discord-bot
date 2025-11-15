@@ -23,12 +23,31 @@ module.exports = function createFlaggedStore(baseDir, logger) {
   fs.mkdirSync(storeDir, { recursive: true });
 
   const index = new Map();
+  const reviewIndex = new Map();
+
+  function indexReview(record) {
+    if (!record) return;
+    if (record.reviewMessageId) {
+      reviewIndex.set(record.reviewMessageId, record.messageId);
+    }
+  }
+
+  function dropReview(record) {
+    if (!record) return;
+    if (record.reviewMessageId) {
+      const known = reviewIndex.get(record.reviewMessageId);
+      if (known === record.messageId) {
+        reviewIndex.delete(record.reviewMessageId);
+      }
+    }
+  }
 
   function loadInitial() {
     const items = readFile(filePath);
     for (const item of items) {
       if (item && item.messageId) {
         index.set(item.messageId, item);
+        indexReview(item);
       }
     }
     logger?.info('FlaggedStore geladen', { size: index.size });
@@ -40,8 +59,9 @@ module.exports = function createFlaggedStore(baseDir, logger) {
 
   function upsert(record) {
     if (!record || !record.messageId) return null;
+    const previous = index.get(record.messageId) || null;
     const merged = {
-      ...index.get(record.messageId),
+      ...previous,
       ...record,
       updatedAt: new Date().toISOString()
     };
@@ -49,14 +69,21 @@ module.exports = function createFlaggedStore(baseDir, logger) {
       merged.createdAt = new Date().toISOString();
     }
     index.set(record.messageId, merged);
+    if (previous) {
+      dropReview(previous);
+    }
+    indexReview(merged);
     persist();
     return merged;
   }
 
   function remove(messageId) {
-    const existed = index.delete(messageId);
-    if (existed) persist();
-    return existed;
+    const existing = index.get(messageId);
+    if (!existing) return false;
+    index.delete(messageId);
+    dropReview(existing);
+    persist();
+    return true;
   }
 
   loadInitial();
@@ -67,6 +94,10 @@ module.exports = function createFlaggedStore(baseDir, logger) {
     get: (messageId) => index.get(messageId),
     list: () => Array.from(index.values()),
     size: () => index.size,
-    snapshot: () => new Map(index)
+    snapshot: () => new Map(index),
+    findByReviewMessage: (reviewMessageId) => {
+      const messageId = reviewIndex.get(reviewMessageId);
+      return messageId ? index.get(messageId) || null : null;
+    }
   };
 };

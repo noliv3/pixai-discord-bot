@@ -47,54 +47,28 @@ module.exports = function registerMessageCreate(api) {
 
   registerEventHandler('messageCreate', async ({ args, guildConfig, moduleConfig }) => {
     const [message] = args;
-    if (!message?.attachments?.size) return;
     if (!moduleConfig || moduleConfig.enabled === false) return;
     if (!guildConfig?.scan?.enabled) return;
     if (!scanner?.isEnabled?.()) return;
+    if (Array.isArray(message._pixai?.scanResults)) return;
+    if (!message?.attachments?.size) return;
 
     const attachments = Array.from(message.attachments.values()).filter(isScannableAttachment);
     if (attachments.length === 0) return;
 
     const results = [];
-    const thresholds = moduleConfig.thresholds || guildConfig.scan?.thresholds || {};
-    const flagThreshold = Number.isFinite(thresholds.flag) ? thresholds.flag : 0.6;
-    const deleteThreshold = Number.isFinite(thresholds.delete) ? thresholds.delete : 0.95;
-
     for (const attachment of attachments) {
       try {
         const buffer = await fetchAttachment(attachment);
         const scanResult = await scanner.scanImage(buffer, attachment.name, attachment.contentType);
         const parsed = parseScanResult(scanResult);
         results.push({ attachment, scan: parsed });
-        if (parsed.risk >= deleteThreshold || parsed.remove) {
-          flaggedStore.upsert({
-            messageId: message.id,
-            guildId: message.guildId,
-            channelId: message.channelId,
-            userId: message.author.id,
-            status: 'delete',
-            risk: parsed.risk,
-            attachment: attachment.url,
-            tags: parsed.tags
-          });
-          logger?.warn?.('Upload überschreitet Delete-Threshold', { messageId: message.id, risk: parsed.risk });
-        } else if (parsed.risk >= flagThreshold || parsed.flagged) {
-          flaggedStore.upsert({
-            messageId: message.id,
-            guildId: message.guildId,
-            channelId: message.channelId,
-            userId: message.author.id,
-            status: 'flag',
-            risk: parsed.risk,
-            attachment: attachment.url,
-            tags: parsed.tags
-          });
-          logger?.info?.('Upload markiert zur Moderation', { messageId: message.id, risk: parsed.risk });
-        }
       } catch (error) {
         logger?.error?.('Fehler beim Scannen eines Attachments', { error: error.message });
       }
     }
+
+    if (results.length === 0) return;
 
     if (!message._pixai) {
       Object.defineProperty(message, '_pixai', {
