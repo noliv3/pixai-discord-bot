@@ -7,7 +7,7 @@ Ein modularer Discord-Bot für die PixAI-Community. Die aktuelle Generation setz
 - **Bot-Kern**: Läuft auf Node.js (discord.js v14) im Verzeichnis [`bot/`](./bot/). Der Core initialisiert den Discord-Client, lädt Konfigurationen, Module und Health-Checks.
 - **Module**: Befinden sich unter [`bot/modules/`](./bot/modules/) und kapseln Features wie Tag-Scanning, Picture-Events und Community-Guard.
 - **Persistenz**: `lib/eventStore.js` und `lib/flaggedStore.js` speichern Event-Uploads bzw. moderierte Inhalte als JSON.
-- **Scanner-Integration**: `lib/scannerClient.js` bündelt alle HTTP-Aufrufe zum externen Scanner.
+- **Scanner-Integration**: `lib/scannerClient.js` bündelt alle HTTP-Aufrufe zum externen Scanner. Der Client erwartet einen reinen Text-Token vom Endpunkt `/token` und sendet ihn unverändert (ohne `Bearer`-Präfix) im `Authorization`-Header.
 
 ## Kanonische Dokumentation
 
