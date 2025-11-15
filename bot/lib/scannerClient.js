@@ -1,4 +1,5 @@
 const { Blob } = require('node:buffer');
+const https = require('node:https');
 
 const DEFAULT_TIMEOUT = 15000;
 const TOKEN_TTL = 10 * 60 * 1000; // 10 Minuten
@@ -41,22 +42,34 @@ module.exports = function createScannerClient(scannerConfig = {}, logger) {
   }
 
   async function downloadToBuffer(url, { timeout = DEFAULT_TIMEOUT } = {}) {
-    let signal;
-    if (typeof AbortController !== 'undefined' && typeof AbortController.timeout === 'function') {
-      signal = AbortController.timeout(timeout);
-    } else if (typeof AbortController !== 'undefined') {
-      const controller = new AbortController();
-      signal = controller.signal;
-      setTimeout(() => controller.abort(), timeout).unref?.();
-    }
+    return new Promise((resolve, reject) => {
+      const req = https.get(url, { timeout }, (res) => {
+        if (res.statusCode !== 200) {
+          reject(new Error(`Download failed ${res.statusCode}`));
+          return;
+        }
 
-    const response = await fetch(url, signal ? { signal } : undefined);
-    if (!response.ok) {
-      throw new Error(`Download failed ${response.status}`);
-    }
-    const buffer = Buffer.from(await response.arrayBuffer());
-    const mime = response.headers.get('content-type') || 'application/octet-stream';
-    return { buffer, mime };
+        const mime = res.headers['content-type'] || 'application/octet-stream';
+        const chunks = [];
+
+        res.on('data', (chunk) => chunks.push(chunk));
+        res.on('end', () => {
+          resolve({
+            buffer: Buffer.concat(chunks),
+            mime
+          });
+        });
+      });
+
+      req.on('timeout', () => {
+        req.destroy();
+        reject(new Error('Download timeout'));
+      });
+
+      req.on('error', (err) => {
+        reject(err);
+      });
+    });
   }
 
   function buildForm({ fieldName, buffer, mime, filename }) {

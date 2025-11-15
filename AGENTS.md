@@ -2,7 +2,7 @@
 
 - ✅ Neue Implementierung lebt unter [`bot/`](./bot/). Alle Änderungen für den aktiven Bot passieren dort.
 - 📁 Die Legacy-Fassung bleibt in [`_archived/`](./_archived/) und ist nur Referenz – keine Änderungen ohne ausdrückliche Aufgabe. Die historischen DOCU-Unterlagen liegen jetzt unter [`_archived/DOCU/`](./_archived/DOCU/).
-- 🧾 Dokumentation pflegen: Diese Datei sowie [`README.md`](./README.md), [`docs/README.md`](./docs/README.md) und [`docs/AGENTS.md`](./docs/AGENTS.md) sind die verbindlichen Quellen.
+- 🧾 Dokumentation pflegen: Diese Datei sowie [`README.md`](./README.md), [`docs/README.md`](./docs/README.md) und [`docs/AGENTS.md`](./docs/AGENTS.md) sind die verbindlichen Quellen. Ergänzende Referenzen (z. B. Scanner-API-Spezifikationen) liegen unter [`docs/scanner-api-reference/`](./docs/scanner-api-reference/) und gehören **nicht** zum produktiven Bot-Code.
 - 🔄 Scanner-Client: `/token` liefert einen reinen Text-Token. Verwende ihn unverändert im `Authorization`-Header (kein `Bearer`). Der Client in `bot/lib/scannerClient.js` übernimmt Downloads & Multipart-Aufbau – nutze dort `checkImageFromUrl` für Einzelbilder bzw. `batchFromUrl` für GIF/Video-Uploads.
 - 📦 Der Scanner-Client nutzt ausschließlich die in Node.js 18+ enthaltenen Implementierungen von `fetch`, `FormData`, `File` und `Blob`. Zusätzliche HTTP- oder Multipart-Pakete sind nicht erforderlich.
 - 📦 Der aktive Code bleibt bei CommonJS (`require`). Besonders `bot/lib/scannerClient.js` exportiert einen Factory-Wrapper; bitte keine ES-Module-Imports im aktiven Bot ergänzen.

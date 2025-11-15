@@ -7,7 +7,7 @@ Ein modularer Discord-Bot für die PixAI-Community. Die aktuelle Generation setz
 - **Bot-Kern**: Läuft auf Node.js (discord.js v14) im Verzeichnis [`bot/`](./bot/). Der Core initialisiert den Discord-Client, lädt Konfigurationen, Module und Health-Checks.
 - **Module**: Befinden sich unter [`bot/modules/`](./bot/modules/) und kapseln Features wie Tag-Scanning, Picture-Events, Community-Guard und den NSFW-Scanner.
 - **Persistenz**: `lib/eventStore.js` und `lib/flaggedStore.js` speichern Event-Uploads bzw. moderierte Inhalte als JSON.
-- **Scanner-Integration**: `lib/scannerClient.js` bündelt alle HTTP-Aufrufe zum externen Scanner. Der Client erwartet einen reinen Text-Token vom Endpunkt `/token` und sendet ihn unverändert (ohne `Bearer`-Präfix) im `Authorization`-Header. Seit dem neuen Upload-Flow erledigt der Client auch das Herunterladen von Medien (Discord-CDN, externe Links) und baut korrekte `multipart/form-data`-Uploads über die Hilfsfunktionen `checkImageFromUrl` (Einzelbilder) sowie `batchFromUrl` (GIF/Video). Technisch kommt dafür ausschließlich die in Node.js integrierte `fetch`-Implementierung inklusive `FormData`, `File` und `Blob` zum Einsatz. Der Code bleibt dabei vollständig im CommonJS-Stil (`require`), sodass keine `type: "module"`-Umstellung nötig ist.
+- **Scanner-Integration**: `lib/scannerClient.js` bündelt alle HTTP-Aufrufe zum externen Scanner. Der Client erwartet einen reinen Text-Token vom Endpunkt `/token` und sendet ihn unverändert (ohne `Bearer`-Präfix) im `Authorization`-Header. Seit dem neuen Upload-Flow erledigt der Client auch das Herunterladen von Medien (Discord-CDN, externe Links) und baut korrekte `multipart/form-data`-Uploads über die Hilfsfunktionen `checkImageFromUrl` (Einzelbilder) sowie `batchFromUrl` (GIF/Video). Für Downloads verwenden wir bewusst das Node.js-`https`-Modul, um Timeout- und Stream-Handling stabil zu halten; für die Uploads kommen die nativen Implementierungen von `fetch`, `FormData`, `File` und `Blob` zum Einsatz. Der Code bleibt dabei vollständig im CommonJS-Stil (`require`), sodass keine `type: "module"`-Umstellung nötig ist.
 
 ## Phase-2 Scanner (BOT1)
 
@@ -41,6 +41,7 @@ Die folgenden Dokumente sind die Referenz für Architektur, Prozesse und Rollen:
 - [`docs/README.md`](./docs/README.md) – Detailarchitektur, Flows und Betriebsleitfäden.
 - [`docs/AGENTS.md`](./docs/AGENTS.md) – Rollen- und Verantwortlichkeitsmatrix.
 - [`AGENTS.md`](./AGENTS.md) – Arbeitsrichtlinien für dieses Repository.
+- [`docs/scanner-api-reference/`](./docs/scanner-api-reference/) – Ablage für externe Scanner-API-Referenzen (kein produktiver Code).
 
 Historische Unterlagen liegen unter [`_archived/`](./_archived/) und dienen nur als Referenz.
 
