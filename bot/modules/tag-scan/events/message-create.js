@@ -5,6 +5,15 @@ function isScannableAttachment(attachment) {
   return attachment.contentType.startsWith('image/') || attachment.contentType.startsWith('video/');
 }
 
+function requiresBatchScan(attachment) {
+  const name = (attachment?.name || '').toLowerCase();
+  const contentType = (attachment?.contentType || '').toLowerCase();
+  if (contentType.startsWith('video/')) return true;
+  if (contentType === 'image/gif') return true;
+  if (/\.(gif|webm|mp4|mov)$/i.test(name)) return true;
+  return false;
+}
+
 function parseScanResult(result) {
   if (!result || !result.ok) {
     return { status: 'error', flagged: false, remove: false, risk: 0, tags: [], raw: result?.data ?? null };
@@ -31,19 +40,8 @@ function parseScanResult(result) {
   };
 }
 
-async function fetchAttachment(attachment) {
-  const response = await fetch(attachment.url, {
-    signal: AbortSignal.timeout(15000)
-  });
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`);
-  }
-  const buffer = Buffer.from(await response.arrayBuffer());
-  return buffer;
-}
-
 module.exports = function registerMessageCreate(api) {
-  const { registerEventHandler, scanner, flaggedStore, logger } = api;
+  const { registerEventHandler, scanner, logger } = api;
 
   registerEventHandler('messageCreate', async ({ args, guildConfig, moduleConfig }) => {
     const [message] = args;
@@ -59,8 +57,16 @@ module.exports = function registerMessageCreate(api) {
     const results = [];
     for (const attachment of attachments) {
       try {
-        const buffer = await fetchAttachment(attachment);
-        const scanResult = await scanner.scanImage(buffer, attachment.name, attachment.contentType);
+        const useBatch = requiresBatchScan(attachment);
+        const scanResult = useBatch
+          ? await scanner.batchFromUrl(attachment.url, {
+              filename: attachment.name,
+              contentType: attachment.contentType
+            })
+          : await scanner.checkImageFromUrl(attachment.url, {
+              filename: attachment.name,
+              contentType: attachment.contentType
+            });
         const parsed = parseScanResult(scanResult);
         results.push({ attachment, scan: parsed });
       } catch (error) {

@@ -12,6 +12,8 @@
   },
   "dependencies": {
     "adm-zip": "^0.5.10",
-    "discord.js": "^14.15.3"
+    "axios": "^1.6.8",
+    "discord.js": "^14.15.3",
+    "form-data": "^4.0.0"
   }
 }
