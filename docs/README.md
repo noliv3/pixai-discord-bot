@@ -30,11 +30,12 @@ Der Module Loader stellt jedem Modul ein `coreApi` bereit (`client`, `configMana
 
 ## 2. Scanner-Anbindung
 
-`scannerClient.js` kapselt alle Interaktionen mit dem externen Dienst:
+`scannerClient.js` kapselt alle Interaktionen mit dem externen Dienst und wird als CommonJS-Factory (`require('./lib/scannerClient')`) eingebunden:
 
-- `ensureToken()` holt und cached ein API-Token.
+- `ensureToken()` holt und cached ein API-Token, inklusive automatischem Renew bei `403`.
 - `scanImage(buffer, filename, mimeType)` sendet Attachments an `/check`.
-- `scanBatch(buffer, mimeType)` erlaubt Batch-Uploads (z. B. ZIPs).
+- `scanBatch(buffer, mimeType, filename?)` erlaubt Batch-Uploads (z. B. GIF/Video).
+- `checkImageFromUrl(url, meta?)` bzw. `batchFromUrl(url, meta?)` laden Medien zuerst herunter und übernehmen anschließend den Upload.
 - `getStats()` liefert Statusinformationen für den Health-Check.
 
 Fehler oder Zeitüberschreitungen werden protokolliert. Ist kein `baseUrl` gesetzt, bleibt der Client deaktiviert – der Bot läuft weiter, markiert Uploads aber nicht automatisch.
