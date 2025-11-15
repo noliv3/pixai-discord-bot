@@ -1,75 +1,183 @@
-import { Blob } from 'node:buffer';
-import { setTimeout as delay } from 'node:timers/promises';
+const { Blob } = require('node:buffer');
 
-let cachedToken = null;
-let tokenExpires = 0;
+const DEFAULT_TIMEOUT = 15000;
+const TOKEN_TTL = 10 * 60 * 1000; // 10 Minuten
 
-export async function ensureToken(scannerConfig) {
-  const now = Date.now();
-  const baseUrl = scannerConfig.baseUrl.replace(/\/+$/, '');
+module.exports = function createScannerClient(scannerConfig = {}, logger) {
+  const baseUrl = String(scannerConfig.baseUrl || '').replace(/\/+$/, '');
+  const email = scannerConfig.email || '';
+  const enabled = scannerConfig.enabled !== false && Boolean(baseUrl && email);
 
-  if (cachedToken && now < tokenExpires) return cachedToken;
+  let cachedToken = null;
+  let tokenExpiresAt = 0;
 
-  const url = `${baseUrl}/token?email=${encodeURIComponent(scannerConfig.email)}`;
-  const resp = await fetch(url, { method: 'GET' });
-  if (!resp.ok) throw new Error(`Token error: ${resp.status}`);
-
-  const text = (await resp.text()).trim();
-  cachedToken = text;
-  tokenExpires = now + 10 * 60 * 1000; // 10 min
-  return cachedToken;
-}
-
-async function downloadAsBuffer(url) {
-  const resp = await fetch(url);
-  if (!resp.ok) throw new Error(`Download failed ${resp.status}`);
-  const arr = new Uint8Array(await resp.arrayBuffer());
-  const ct = resp.headers.get('content-type') || 'application/octet-stream';
-  return { buffer: arr, mime: ct };
-}
-
-async function sendMultipart(scannerConfig, path, fieldName, buffer, mime) {
-  const baseUrl = scannerConfig.baseUrl.replace(/\/+$/, '');
-  let token = await ensureToken(scannerConfig);
-
-  const form = new FormData();
-  form.append(fieldName, new Blob([buffer], { type: mime }), 'upload.bin');
-
-  async function doRequest(tk) {
-    const resp = await fetch(`${baseUrl}/${path}`, {
-      method: 'POST',
-      headers: { Authorization: tk },
-      body: form
-    });
-    return resp;
+  function isEnabled() {
+    return enabled;
   }
 
-  let resp = await doRequest(token);
-  if (resp.status === 403) {
-    // renew once
-    const renewUrl = `${baseUrl}/token?email=${encodeURIComponent(scannerConfig.email)}&renew=1`;
-    const r = await fetch(renewUrl);
-    if (r.ok) {
-      token = (await r.text()).trim();
-      cachedToken = token;
-      resp = await doRequest(token);
+  async function fetchToken({ renew = false } = {}) {
+    if (!baseUrl || !email) {
+      throw new Error('Scanner-Client ist nicht vollständig konfiguriert.');
+    }
+
+    const renewSuffix = renew ? '&renew=1' : '';
+    const url = `${baseUrl}/token?email=${encodeURIComponent(email)}${renewSuffix}`;
+    const response = await fetch(url, { method: 'GET' });
+    if (!response.ok) {
+      throw new Error(`Token error: ${response.status}`);
+    }
+    return (await response.text()).trim();
+  }
+
+  async function ensureToken({ forceRenew = false } = {}) {
+    const now = Date.now();
+    if (!forceRenew && cachedToken && now < tokenExpiresAt) {
+      return cachedToken;
+    }
+    const token = await fetchToken({ renew: forceRenew });
+    cachedToken = token;
+    tokenExpiresAt = now + TOKEN_TTL;
+    return cachedToken;
+  }
+
+  async function downloadToBuffer(url, { timeout = DEFAULT_TIMEOUT } = {}) {
+    let signal;
+    if (typeof AbortController !== 'undefined' && typeof AbortController.timeout === 'function') {
+      signal = AbortController.timeout(timeout);
+    } else if (typeof AbortController !== 'undefined') {
+      const controller = new AbortController();
+      signal = controller.signal;
+      setTimeout(() => controller.abort(), timeout).unref?.();
+    }
+
+    const response = await fetch(url, signal ? { signal } : undefined);
+    if (!response.ok) {
+      throw new Error(`Download failed ${response.status}`);
+    }
+    const buffer = Buffer.from(await response.arrayBuffer());
+    const mime = response.headers.get('content-type') || 'application/octet-stream';
+    return { buffer, mime };
+  }
+
+  function buildForm({ fieldName, buffer, mime, filename }) {
+    const form = new FormData();
+    form.append(fieldName, new Blob([buffer], { type: mime }), filename || 'upload.bin');
+    return form;
+  }
+
+  async function sendMultipart({ path, fieldName, buffer, mime, filename }) {
+    if (!isEnabled()) {
+      return { ok: false, status: 503, error: 'Scanner disabled' };
+    }
+
+    let token;
+    try {
+      token = await ensureToken();
+    } catch (error) {
+      logger?.error?.('Token konnte nicht abgerufen werden', { error: error.message });
+      return { ok: false, status: 0, error: error.message };
+    }
+
+    async function doRequest(currentToken) {
+      const response = await fetch(`${baseUrl}/${path}`, {
+        method: 'POST',
+        headers: { Authorization: currentToken },
+        body: buildForm({ fieldName, buffer, mime: mime || 'application/octet-stream', filename })
+      });
+      return response;
+    }
+
+    let response;
+    try {
+      response = await doRequest(token);
+    } catch (error) {
+      logger?.error?.('Scanner-Upload fehlgeschlagen', { error: error.message, path });
+      return { ok: false, status: 0, error: error.message };
+    }
+
+    if (response.status === 403) {
+      try {
+        token = await ensureToken({ forceRenew: true });
+        response = await doRequest(token);
+      } catch (error) {
+        logger?.error?.('Token-Renew fehlgeschlagen', { error: error.message });
+        return { ok: false, status: 403, error: error.message };
+      }
+    }
+
+    let data = null;
+    try {
+      data = await response.json();
+    } catch (error) {
+      const text = await response.text().catch(() => '');
+      return {
+        ok: false,
+        status: response.status,
+        error: text || error.message
+      };
+    }
+
+    if (!response.ok) {
+      const error = typeof data === 'object' ? data?.error || JSON.stringify(data) : String(data);
+      return { ok: false, status: response.status, error };
+    }
+
+    return { ok: true, status: response.status, data };
+  }
+
+  async function scanImage(buffer, filename, mimeType) {
+    return sendMultipart({ path: 'check', fieldName: 'image', buffer, mime: mimeType, filename });
+  }
+
+  async function scanBatch(buffer, mimeType, filename = 'upload.bin') {
+    return sendMultipart({ path: 'batch', fieldName: 'file', buffer, mime: mimeType, filename });
+  }
+
+  async function checkImageFromUrl(url, { filename, contentType, timeout } = {}) {
+    const { buffer, mime } = await downloadToBuffer(url, { timeout });
+    return scanImage(buffer, filename || null, contentType || mime);
+  }
+
+  async function batchFromUrl(url, { filename, contentType, timeout } = {}) {
+    const { buffer, mime } = await downloadToBuffer(url, { timeout });
+    return scanBatch(buffer, contentType || mime, filename || 'upload.bin');
+  }
+
+  async function getStats() {
+    if (!isEnabled()) {
+      return { ok: false, status: 503, error: 'Scanner disabled' };
+    }
+    let token;
+    try {
+      token = await ensureToken();
+    } catch (error) {
+      return { ok: false, status: 0, error: error.message };
+    }
+
+    try {
+      const response = await fetch(`${baseUrl}/stats`, {
+        method: 'GET',
+        headers: { Authorization: token }
+      });
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        return { ok: false, status: response.status, error: text };
+      }
+      const data = await response.json().catch(() => ({}));
+      return { ok: true, status: response.status, data };
+    } catch (error) {
+      logger?.error?.('Scanner-Status konnte nicht geladen werden', { error: error.message });
+      return { ok: false, status: 0, error: error.message };
     }
   }
 
-  if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(`Scanner error ${resp.status}: ${text}`);
-  }
-
-  return await resp.json();
-}
-
-export async function checkImageFromUrl(scannerConfig, imageUrl) {
-  const { buffer, mime } = await downloadAsBuffer(imageUrl);
-  return sendMultipart(scannerConfig, 'check', 'image', buffer, mime);
-}
-
-export async function batchFromUrl(scannerConfig, fileUrl) {
-  const { buffer, mime } = await downloadAsBuffer(fileUrl);
-  return sendMultipart(scannerConfig, 'batch', 'file', buffer, mime);
-}
+  return {
+    isEnabled,
+    ensureToken,
+    scanImage,
+    scanBatch,
+    checkImageFromUrl,
+    batchFromUrl,
+    getStats
+  };
+};
