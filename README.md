@@ -5,7 +5,7 @@ Ein modularer Discord-Bot für die PixAI-Community. Die aktuelle Generation setz
 ## Projektüberblick
 
 - **Bot-Kern**: Läuft auf Node.js (discord.js v14) im Verzeichnis [`bot/`](./bot/). Der Core initialisiert den Discord-Client, lädt Konfigurationen, Module und Health-Checks.
-- **Module**: Befinden sich unter [`bot/modules/`](./bot/modules/) und kapseln Features wie Tag-Scanning, Picture-Events und Community-Guard.
+- **Module**: Befinden sich unter [`bot/modules/`](./bot/modules/) und kapseln Features wie Tag-Scanning, Picture-Events, Community-Guard und den NSFW-Scanner.
 - **Persistenz**: `lib/eventStore.js` und `lib/flaggedStore.js` speichern Event-Uploads bzw. moderierte Inhalte als JSON.
 - **Scanner-Integration**: `lib/scannerClient.js` bündelt alle HTTP-Aufrufe zum externen Scanner. Der Client erwartet einen reinen Text-Token vom Endpunkt `/token` und sendet ihn unverändert (ohne `Bearer`-Präfix) im `Authorization`-Header.
 
@@ -27,11 +27,11 @@ Die Legacy-PIX-Bot-Logik wurde als modulare Bibliothek in BOT1 integriert. Wicht
 
 ### Moderations-Flow
 
-1. `bot/events/messageCreate_v1.js` sammelt Attachments, Embeds, Links, Replies und Nachricht-Links, lädt Medien herunter und ruft den Scanner über `scannerClient_v1`.
+1. Das Modul `nsfw-scanner` registriert sich beim `moduleLoader` für `messageCreate`, `messageReactionAdd` und `messageReactionRemove` und startet nur, wenn es pro Guild aktiviert ist.
 2. `scanCore_v1` normalisiert Tags, berechnet Risiko & Level und schreibt Ergebnisse nach `message._pixai.scanResults` (Kompatibilität zu Modulen).
 3. `modReview_v1` entscheidet anhand von Schwellenwerten (`scan.thresholds`) über `ignore`, `flag` oder `delete`, löscht ggf. die Originalnachricht und legt einen Datensatz im `flaggedStore` an.
-4. Bei Flags wird ein Embed im Mod-Channel mit Reaktionen (`✅❌⚠️🔁`) erstellt. Reaktionen werden in `messageReactionAdd_v1`/`messageReactionRemove_v1` verarbeitet.
-5. On-Demand-Scans können per `?`-Reaction ausgelöst werden (öffentliche Antwort mit den Scan-Daten).
+4. Bei Flags wird ein Embed im Mod-Channel mit Reaktionen (`✅❌⚠️🔁`) erstellt. Reaktionen laufen über die Modul-Handler (`events/message-reaction-add.js` & `events/message-reaction-remove.js`).
+5. On-Demand-Scans können per `?`-Reaction ausgelöst werden (öffentliche Antwort mit den Scan-Daten), sofern das Modul `nsfw-scanner` aktiv ist.
 
 ## Kanonische Dokumentation
 
@@ -78,6 +78,13 @@ bot/
         scan-config.js
       events/
         message-create.js
+    nsfw-scanner/
+      module.json
+      index.js
+      events/
+        message-create.js
+        message-reaction-add.js
+        message-reaction-remove.js
     picture-events/
       module.json
       index.js
