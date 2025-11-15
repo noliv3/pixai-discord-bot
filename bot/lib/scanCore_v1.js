@@ -11,6 +11,60 @@ const PUBLIC_SCAN_PREFIX = 'public:';
 
 const USER_AGENT = 'PixAI-DiscordBot/2.0 (+https://pixai.ai)';
 
+function normalizeScannerPayload(data) {
+  if (!data || typeof data !== 'object') {
+    return { raw: data, modules: {}, scores: {} };
+  }
+
+  const normalized = {
+    raw: data,
+    modules: {},
+    scores: {}
+  };
+
+  if (data.modules && typeof data.modules === 'object') {
+    normalized.modules = { ...data.modules };
+  }
+
+  for (const [key, value] of Object.entries(data)) {
+    if (!key.startsWith('modules.')) continue;
+    const moduleName = key.slice(8);
+    normalized.modules[moduleName] = value;
+  }
+
+  if (data.scores && typeof data.scores === 'object') {
+    normalized.scores = { ...data.scores };
+  }
+
+  if (Object.keys(normalized.scores).length === 0) {
+    const nsfwModule = normalized.modules.nsfw_scanner;
+    if (nsfwModule && typeof nsfwModule === 'object') {
+      if (nsfwModule.scores && typeof nsfwModule.scores === 'object') {
+        normalized.scores = { ...nsfwModule.scores };
+      } else {
+        const flatScores = {};
+        for (const [name, value] of Object.entries(nsfwModule)) {
+          if (typeof value === 'number') {
+            flatScores[name] = value;
+            continue;
+          }
+          if (typeof value === 'string') {
+            const numeric = Number.parseFloat(value);
+            if (!Number.isNaN(numeric)) {
+              flatScores[name] = numeric;
+            }
+          }
+        }
+        if (Object.keys(flatScores).length > 0) {
+          normalized.scores = flatScores;
+        }
+      }
+    }
+  }
+
+  return normalized;
+}
+
 function toExtension(name = '') {
   const match = /\.([a-z0-9]+)$/i.exec(name.split('?')[0] || '');
   return match ? `.${match[1].toLowerCase()}` : '';
@@ -215,17 +269,20 @@ async function scanTarget({ target, scanner, filters, thresholds, logger }) {
       logger?.warn?.('Scanner-Antwort ungültig', { url: finalUrl, status: response?.status, error: response?.error });
       return null;
     }
-    const data = response.data;
+    const normalized = normalizeScannerPayload(response.data);
+    const data = normalized.raw;
     const tags = extractTags(data);
     const lowerTags = tags.map((tag) => tag.toLowerCase());
     const { level, matched } = riskEngine.evaluateTags(lowerTags, filters);
-    const scores = data.modules?.nsfw_scanner?.scores || data.scores || {};
+    const scores = normalized.scores;
     const risk = riskEngine.calculateRisk(scores);
     const decision = riskEngine.determineAction({ level, risk, thresholds });
     return {
       target,
       download,
       data,
+      modules: normalized.modules,
+      scores,
       tags,
       lowerTags,
       matched,
