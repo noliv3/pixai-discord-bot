@@ -1,0 +1,10 @@
+{
+  "name": "nsfw-scanner",
+  "version": "1.0.0",
+  "description": "Automatische NSFW-Scans mit Tag-Auswertung, Reporting und Review-Reaktionen.",
+  "enabledByDefault": true,
+  "defaultConfig": {
+    "enabled": true,
+    "publicScanEmojis": ["?", "❓"]
+  }
+}

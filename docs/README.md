@@ -75,7 +75,8 @@ Das Ergebnis wird beim Start protokolliert. Kritische Fehler führen zum Abbruch
 
 ### 5.2 Modul-Events
 
-- **`tag-scan` → `messageCreate`** – lädt Attachments, ruft den Scanner auf und aktualisiert den `flaggedStore`. Scan-Ergebnisse werden im Message-Objekt (`message._pixai.scanResults`) hinterlegt, damit andere Module darauf zugreifen können.
+- **`nsfw-scanner` → `messageCreate` / `messageReactionAdd/Remove`** – orchestriert die Phase-2-Scans, erstellt Moderations-Embeds und synchronisiert Reaktionen über `modReview_v1`.
+- **`tag-scan` → `messageCreate`** – stellt Legacy-Fallbacks bereit: Lädt Attachments nur dann direkt beim Scanner hoch, wenn kein Ergebnis von `nsfw-scanner` vorliegt, und liefert Kommandos zur Schwellenwert-Anpassung.
 - **`picture-events` → `messageCreate`** – registriert Uploads in aktiven Event-Kanälen (`eventStore`). Nutzt optional die Scan-Metadaten.
 - **`picture-events` → `messageReactionAdd/Remove`** – mappt Reaktionen auf Votes und pflegt Event-Statistiken.
 - **`community-guard` → `messageReactionAdd/Remove`** – interpretiert Moderations-Emojis auf geflaggten Nachrichten und aktualisiert den `flaggedStore` (inkl. optionalem Delete).
