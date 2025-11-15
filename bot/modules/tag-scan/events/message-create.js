@@ -1,17 +1,28 @@
-function isScannableAttachment(attachment) {
-  if (!attachment?.contentType) {
-    return /\.(png|jpe?g|gif|webp|mp4|mov)$/i.test(attachment.name || '');
-  }
-  return attachment.contentType.startsWith('image/') || attachment.contentType.startsWith('video/');
-}
-
-function requiresBatchScan(attachment) {
+function detectScanMode(attachment) {
   const name = (attachment?.name || '').toLowerCase();
   const contentType = (attachment?.contentType || '').toLowerCase();
-  if (contentType.startsWith('video/')) return true;
-  if (contentType === 'image/gif') return true;
-  if (/\.(gif|webm|mp4|mov)$/i.test(name)) return true;
-  return false;
+
+  if (contentType === 'image/gif') return 'batch';
+  if (contentType.startsWith('video/')) return 'batch';
+  if (/\.(gif|mp4|webm)$/i.test(name)) return 'batch';
+
+  if (contentType === 'image/jpeg' || contentType === 'image/jpg') return 'check';
+  if (contentType === 'image/png') return 'check';
+  if (contentType === 'image/webp') return 'check';
+
+  if (/\.(jpe?g|png|webp)$/i.test(name)) return 'check';
+
+  if (contentType.startsWith('image/')) {
+    if (contentType.includes('jpeg') || contentType.includes('png') || contentType.includes('webp')) {
+      return 'check';
+    }
+  }
+
+  return null;
+}
+
+function isScannableAttachment(attachment) {
+  return Boolean(detectScanMode(attachment));
 }
 
 function parseScanResult(result) {
@@ -56,9 +67,11 @@ module.exports = function registerMessageCreate(api) {
 
     const results = [];
     for (const attachment of attachments) {
+      const mode = detectScanMode(attachment);
+      if (!mode) continue;
+
       try {
-        const useBatch = requiresBatchScan(attachment);
-        const scanResult = useBatch
+        const scanResult = mode === 'batch'
           ? await scanner.batchFromUrl(attachment.url, {
               filename: attachment.name,
               contentType: attachment.contentType
