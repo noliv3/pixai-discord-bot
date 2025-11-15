@@ -9,6 +9,30 @@ Ein modularer Discord-Bot für die PixAI-Community. Die aktuelle Generation setz
 - **Persistenz**: `lib/eventStore.js` und `lib/flaggedStore.js` speichern Event-Uploads bzw. moderierte Inhalte als JSON.
 - **Scanner-Integration**: `lib/scannerClient.js` bündelt alle HTTP-Aufrufe zum externen Scanner. Der Client erwartet einen reinen Text-Token vom Endpunkt `/token` und sendet ihn unverändert (ohne `Bearer`-Präfix) im `Authorization`-Header.
 
+## Phase-2 Scanner (BOT1)
+
+Die Legacy-PIX-Bot-Logik wurde als modulare Bibliothek in BOT1 integriert. Wichtige Zuordnungen:
+
+- `scanCore_v1` ← Sammeln & Scannen von Medien (aus `handleMessageCreate.js`, `handleImageScan.js`, `handleVideoScan.js`).
+- `urlSanitizer_v1` ← URL-Validierung & `og:image`-Fallback (`urlSanitizer.js`).
+- `tagUtils_v1`, `riskEngine_v1`, `scanCache_v1` ← Tag-Aufbereitung, Risiko-Bewertung & TTL-Cache (`tagUtils.js`, `scannerFilter.js`, `riskUtils.js`, `scanCache.js`).
+- `modReview_v1` ← Moderations-Flow inkl. Flagging, Auto-Löschung & DM-Warnungen (`modReview.js`, `modLogger.js`, `flaggedStore.js`).
+- `eventUpload_v1`, `voteUtils_v1` ← Helper für Event-Uploads & Voting (`handleEventUpload.js`, `voteUtils.js`).
+
+### Neue Konfigurationswerte
+
+- `defaults.guild.scan.tagFilters` bzw. `guild.scan.tagFilters`: Taglisten für Level `0–3` (siehe Legacy `scanner-filters.json`).
+- `guild.channels.modLog`: Kanal, in dem Auto-Mod-Embeds + Review-Reaktionen landen.
+- `guild.scan.rulesLink` (optional): Hinweis-Link für Warn-DMs (Fallback: `guild.channels.rules`).
+
+### Moderations-Flow
+
+1. `bot/events/messageCreate_v1.js` sammelt Attachments, Embeds, Links, Replies und Nachricht-Links, lädt Medien herunter und ruft den Scanner über `scannerClient_v1`.
+2. `scanCore_v1` normalisiert Tags, berechnet Risiko & Level und schreibt Ergebnisse nach `message._pixai.scanResults` (Kompatibilität zu Modulen).
+3. `modReview_v1` entscheidet anhand von Schwellenwerten (`scan.thresholds`) über `ignore`, `flag` oder `delete`, löscht ggf. die Originalnachricht und legt einen Datensatz im `flaggedStore` an.
+4. Bei Flags wird ein Embed im Mod-Channel mit Reaktionen (`✅❌⚠️🔁`) erstellt. Reaktionen werden in `messageReactionAdd_v1`/`messageReactionRemove_v1` verarbeitet.
+5. On-Demand-Scans können per `?`-Reaction ausgelöst werden (öffentliche Antwort mit den Scan-Daten).
+
 ## Kanonische Dokumentation
 
 Die folgenden Dokumente sind die Referenz für Architektur, Prozesse und Rollen:
